@@ -8,8 +8,8 @@
  */
 
 define("ALBUM_DIRECTORY", "PhotoAlbums/");
+define("BACKUPS_DIRECTORY", ALBUM_DIRECTORY."__backups/");
 define("UPLOADS_DIRECTORY", "uploads/");
-define("EXTRACTED_DIRECTORY", UPLOADS_DIRECTORY. "extracted/");
 define("PROCESSING_DIRECTORY", UPLOADS_DIRECTORY. "processing/");
 define("COMPLETED_DIRECTORY", UPLOADS_DIRECTORY. "completed/");
 
@@ -23,12 +23,20 @@ class EZAlbum
 	protected $sendToProcessing = FALSE;
 	protected $albumName = "UNSET";
 
-    function __construct()
+	protected $ZipFile="";
+
+	protected $albumOverride = TRUE;
+
+
+
+
+
+    function __construct($myZipFile,$albumOverride=TRUE)
     {
         $arr_RequiredDirectories = array(
 										ALBUM_DIRECTORY,
+										BACKUPS_DIRECTORY,
 										UPLOADS_DIRECTORY,
-										EXTRACTED_DIRECTORY,
 										PROCESSING_DIRECTORY,
 										COMPLETED_DIRECTORY
 									);
@@ -38,10 +46,20 @@ class EZAlbum
                 mkdir($checkDirectory, 0777, TRUE);
             }
         }
+
+		$this->setZipFile($myZipFile);
+		$this->setAlbumOverride($albumOverride);
+		$this->unzip();
     }
 
+	function __destruct(){
+		$this->cleanAndDelete(PROCESSING_DIRECTORY);
+		$this->cleanAndDelete(COMPLETED_DIRECTORY);
+	}
 
-    public function unzip ($myZipFile){
+
+    public function unzip (){
+		$myZipFile = $this->getZipFile();
         ######### ZIP EXTRACTION   #############
         $zip = new ZipArchive;
         if ($zip->open(UPLOADS_DIRECTORY . $myZipFile) === TRUE) {
@@ -58,8 +76,7 @@ class EZAlbum
             echo 'Files Extracted...' . PHP_EOL;
             // Move ZIP File
 
-            rename(UPLOADS_DIRECTORY.$myZipFile, COMPLETED_DIRECTORY. date("Ymds") . "_" . $myZipFile);
-            echo 'Zip File Moved to Completed...' . PHP_EOL;
+
 
 			$extracted_location = $this->scanForSubDirectories($extracted_location);
 
@@ -68,12 +85,16 @@ class EZAlbum
 			}else{
 				echo "An ERROR Occurred";
 			}
+
+		rename(UPLOADS_DIRECTORY.$myZipFile, COMPLETED_DIRECTORY. date("Ymds") . "_" . $myZipFile);
+		echo 'Zip File Moved to Completed...' . PHP_EOL;
+
         } else {
-            echo 'failed';
+            echo 'Cannot find '. $myZipFile . " in the " . UPLOADS_DIRECTORY . " folder.";
         }
     }
 
-	public function scanForSubDirectories($extracted_location){
+	private function scanForSubDirectories($extracted_location){
 		// Check to make sure the photos are not several folders deep
 		if($this->getSubDirectoryCount()<2) {
 			## Scan the $extracted_location and create an array list of all of the files and directories
@@ -96,8 +117,8 @@ class EZAlbum
 
 		return $extracted_location;
 	}
-	
-	protected function containsSubDirectory($arrDocs,$extracted_location){
+
+	private function containsSubDirectory($arrDocs,$extracted_location){
 		$sub_directory="";
 		$dir_counter = 0;
 		foreach ($arrDocs as $a)   //For each document in the current document array
@@ -128,7 +149,7 @@ class EZAlbum
 		}
 	}
 	
-	protected function containsFiles($extracted_location){
+	private function containsFiles($extracted_location){
 
 		$arrDocs = array_diff(scandir($extracted_location), array('..', '.'));
 		natcasesort($arrDocs);  //Sort the File List
@@ -150,8 +171,23 @@ class EZAlbum
 
 			}
 		}
+
+
+		if ($this->isAlbumOverride() == TRUE && file_exists(ALBUM_DIRECTORY.$this->getAlbumName())) {
+			// Optional Clean and Delete or I can just back it up
+
+			// $this->cleanAndDelete(ALBUM_DIRECTORY.$this->getAlbumName());
+			echo "Moving older version - " . ALBUM_DIRECTORY.$this->getAlbumName() . " to " . BACKUPS_DIRECTORY.$this->getAlbumName()."_backup_" . date("Ymds").PHP_EOL;
+
+			rename(ALBUM_DIRECTORY.$this->getAlbumName(), BACKUPS_DIRECTORY.$this->getAlbumName()."_backup_" . date("Ymds"));
+
+		} else{
+			// THIS WILL BE AN ENHANCEMENT FOR LATER
+			//echo "MERGE";
+		}
+
 		rename($extracted_location, ALBUM_DIRECTORY.$this->getAlbumName());
-		
+
 	}
 
 	private function process_image_upload( $extracted_location, $image_file ) {
@@ -234,6 +270,21 @@ class EZAlbum
 		return true;
 	}
 
+	private function cleanAndDelete($dir){
+
+		if (is_dir($dir)) {
+			$objects = scandir($dir);
+			foreach ($objects as $object) {
+				if ($object != "." && $object != "..") {
+					if (filetype($dir."/".$object) == "dir") $this->cleanAndDelete($dir."/".$object); else unlink($dir."/".$object);
+				}
+			}
+			reset($objects);
+			rmdir($dir);
+		}
+
+	}
+
 	/**
 	 * @return string
 	 */
@@ -282,12 +333,45 @@ class EZAlbum
 	{
 		return $this->arr_valid_image_types;
 	}
+
+	/**
+	 * @return string
+	 */
+	private function getZipFile()
+	{
+		return $this->ZipFile;
+	}
+
+	/**
+	 * @param string $ZipFile
+	 */
+	private function setZipFile($ZipFile)
+	{
+		$this->ZipFile = $ZipFile;
+	}
+
+	/**
+	 * @return boolean
+	 */
+	public function isAlbumOverride()
+	{
+		return $this->albumOverride;
+	}
+
+	/**
+	 * @param boolean $albumOverride
+	 */
+	public function setAlbumOverride($albumOverride)
+	{
+		$this->albumOverride = $albumOverride;
+	}
 }
 
 
 #######
-$demoZipFile ="Bethel-Pics.zip";
+$demoZipFile ="Bethel-2016.zip";
 #######
 
-$myAlbum = new EZAlbum();
-$myAlbum->unzip($demoZipFile);
+$myAlbum = new EZAlbum($demoZipFile,TRUE);   // $demoZipFile = Name of Zip File, TRUE = Override Album and recreate in Albums folder
+
+//$myAlbum->unzip($demoZipFile);
