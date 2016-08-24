@@ -23,7 +23,6 @@ class EZAlbum
 	protected $ZipFile="";
 	protected $albumOverride = TRUE;
 
-
     function __construct($myZipFile,$albumOverride=TRUE)
     {
 		// Build an Array of the Directories that will
@@ -57,8 +56,7 @@ class EZAlbum
 		$this->cleanAndDelete(COMPLETED_DIRECTORY);    // This also cleans out the Completed directory, but I think I may change this to SAVE for a certain amount of time
 	}
 
-
-    private function unzip(){
+	private function unzip(){
 
 		$myZipFile = $this->getZipFile();    // Get the class property and set it to the local variable $myZipFile
 
@@ -67,7 +65,6 @@ class EZAlbum
         if ($zip->open(UPLOADS_DIRECTORY . $myZipFile) === TRUE) {
 			
 			$tempFileName = "temp_" . date("Ymds") . "_" . substr($myZipFile,0,-4);   // This will remove the .zip off the end and it is also the temporary name used while processing
-
             $extracted_location = PROCESSING_DIRECTORY . $tempFileName;
 
             $zip->extractTo($extracted_location);   // Extracts the zipfile
@@ -97,21 +94,22 @@ class EZAlbum
 
 	private function scanForSubDirectories($extracted_location){
 		// Check to make sure the photos are not several folders deep
-		if($this->getSubDirectoryCount()<2) {
+		// Currently set to allow only 1 Subdirectory deep
+		if($this->getSubDirectoryCount()<=1) {
 			## Scan the $extracted_location and create an array list of all of the files and directories
-			$arrDocs = array_diff(scandir($extracted_location), array('..', '.'));
+			$arrDocs = array_diff(scandir($extracted_location), array('..', '.'));  //Scan the directory and pull the files different than '..', and '.'
 			natcasesort($arrDocs);  //Sort the File List
 
 			## Scan, Rename, and Remove ##
 			if (isset($arrDocs) && is_array($arrDocs) && $this->isSendToProcessing()===FALSE) {
 				echo "Checking for Sub Directories | " . $extracted_location . PHP_EOL;
-				return $this->containsSubDirectory($arrDocs, $extracted_location);
+				return $this->containsSubDirectory($arrDocs, $extracted_location);   // Check to see if there are folders in the array of files. Basically, make sure that the folder is clean and only contains files.
 			}
 
+			// Just a log message
 			if($this->isSendToProcessing()===TRUE){
 				echo "Send to Processing!". PHP_EOL;
 			}
-
 		} else {
 			echo "Your Photos are buried too deep. Move them to the Top level or down in ONE sub Directory. Remove any extra files or folders.". PHP_EOL;
 		}
@@ -119,7 +117,7 @@ class EZAlbum
 		return $extracted_location;
 	}
 
-	private function containsSubDirectory($arrDocs,$extracted_location){
+    private function containsSubDirectory($arrDocs,$extracted_location){
 		$sub_directory="";
 		$dir_counter = 0;
 		foreach ($arrDocs as $a)   //For each document in the current document array
@@ -132,67 +130,76 @@ class EZAlbum
 			}
 		}
 
-		if($dir_counter==0){
+		if ($dir_counter==0)
+		{
 			echo "Has NO Sub Directory".PHP_EOL;
-			//$hasFiles = $this->containsFiles($arrDocs);
-			$this->setSendToProcessing(TRUE);
-			//$this->setAlbumName();
+			$this->setSendToProcessing(TRUE);   // No folders exist; Set $sendToProcessing to TRUE and recall scanForSubDirectories
 			return $this->scanForSubDirectories($extracted_location);
 
-		} else if($dir_counter==1){
+		}
+		else if($dir_counter==1)
+		{
 			echo "Has ONE Sub Directory".PHP_EOL;
-			$this->setSubDirectoryCount();
+			$this->setSubDirectoryCount();   // Only One directory exists. Dig in and re-scan.
 			return $this->scanForSubDirectories($sub_directory);
 
-		} else {
-			echo "Has TOO MANY Sub Directories".PHP_EOL;
+		}
+		else
+		{
+			echo "Has TOO MANY Sub Directories".PHP_EOL;   // Where there are multiple folders found, return an ERROR and break out.
 			return "ERROR";
 		}
 	}
 	
 	private function containsFiles($extracted_location){
 
-		$arrDocs = array_diff(scandir($extracted_location), array('..', '.'));
+		$arrDocs = array_diff(scandir($extracted_location), array('..', '.'));   //Scan the directory and pull the files different than '..', and '.'
 		natcasesort($arrDocs);  //Sort the File List
 
 		echo "Contains ". count($arrDocs) . " Files".PHP_EOL;
 
-		$ctrPadding = strlen(count($arrDocs));
-		$fileCtr=0;
-		foreach( $arrDocs as $a )   //For each document in the current document array
+		$ctrPadding = strlen(count($arrDocs));   // When numerically naming the files, this creates the LEFT Padding on the integer, ie. 001, 002, 003, etc.
+		$fileCtr=0;                              // Initializes the file counter for renaming
+		foreach( $arrDocs as $a )               // For each document in the current document array
 		{
 			echo "Processing - " . $a . PHP_EOL;
 			// File search and count
 			if( is_file($extracted_location . "/" . $a) && $a != "." && $a != ".." && substr($a,strlen($a)-3,3) != ".db" )      //The "." and ".." are directories.  "." is the current and ".." is the parent
 			{
 				$image_file = $extracted_location . "/" . $a;
+
+				// Validate files to make sure they are of a validate image type
 				if(!in_array(pathinfo($a, PATHINFO_EXTENSION),$this->getArrValidImageTypes())){
-					echo "DELETE - " .$a . PHP_EOL;
-					unlink($image_file);
+					echo "DELETE - " . $a . PHP_EOL;
+					unlink($image_file);   //  DELETE any files that don't match the valid image array
 				} else{
 					$fileCtr++;
 
+					## Create a new image name based off the Album Name
 					$newName = $this->getAlbumName() . "-" . str_pad($fileCtr,$ctrPadding, "0", STR_PAD_LEFT) . substr($a,-4);
 					rename($image_file, $extracted_location . "/" . $newName);
 
-					$this->process_image_upload($extracted_location, $newName);
+					$this->process_image_upload($extracted_location, $newName);   // Process the image; create thumbnails
 				}
 			}
 		}
 
+		// Close out and move files
 		if ($this->isAlbumOverride() == TRUE && file_exists(ALBUM_DIRECTORY.$this->getAlbumName())) {
-			// Optional Clean and Delete or I can just back it up
+			// Optional Clean and Delete or just back it up
 
+			# FUTURE ENHANCEMENT: Add the ability for the USER to select whether to add new files or rebuild if Album exists
 			// $this->cleanAndDelete(ALBUM_DIRECTORY.$this->getAlbumName());
-			echo "Moving older version - " . ALBUM_DIRECTORY.$this->getAlbumName() . " to " . BACKUPS_DIRECTORY.$this->getAlbumName()."_backup_" . date("Ymds").PHP_EOL;
 
-			rename(ALBUM_DIRECTORY.$this->getAlbumName(), BACKUPS_DIRECTORY.$this->getAlbumName()."_backup_" . date("Ymds"));
+			echo "Moving older version - " . ALBUM_DIRECTORY.$this->getAlbumName() . " to " . BACKUPS_DIRECTORY.$this->getAlbumName()."_backup_" . date("Ymds").PHP_EOL;
+			rename(ALBUM_DIRECTORY.$this->getAlbumName(), BACKUPS_DIRECTORY.$this->getAlbumName()."_backup_" . date("Ymds"));   // Move existing Album to the backups directory and rename
 
 		} else{
-			// THIS WILL BE AN ENHANCEMENT FOR LATER
+			// THIS WILL BE AN ENHANCEMENT FOR LATER FOR MERGING FILES
 			//echo "MERGE";
 		}
 
+		# MOVE  Processed files to the Albums Directory
 		rename($extracted_location, ALBUM_DIRECTORY.$this->getAlbumName());
 	}
 
@@ -210,9 +217,9 @@ class EZAlbum
 		//
 
 		$temp_image_path = $UPLOADED_IMAGE_DESTINATION . "/" . $image_file;
-		$temp_image_name = $image_file;
+		//$temp_image_name = $image_file;
 
-		list($width, $height, $temp_image_type, $attr) = getimagesize($temp_image_path);
+		list(,,$temp_image_type) = getimagesize($temp_image_path);  // list($width, $height, $temp_image_type, $attr)
 		if ($temp_image_type === NULL) {
 			return false;
 		}
@@ -239,7 +246,7 @@ class EZAlbum
 
 		$THUMBNAIL_IMAGE_MAX_WIDTH=500;
 		$THUMBNAIL_IMAGE_MAX_HEIGHT=500;
-		//$source_gd_image=false;
+		$source_gd_image=false;
 
 		list($source_image_width, $source_image_height, $source_image_type) = getimagesize($source_image_path);
 		switch ($source_image_type) {
@@ -276,8 +283,8 @@ class EZAlbum
 		return true;
 	}
 
-	private function cleanAndDelete($dir){
-
+	# This Method simply runs the full process to DELETE a Directory; includes all files and sub-directories
+	private function cleanAndDelete($dir) {
 		if (is_dir($dir)) {
 			$objects = scandir($dir);
 			foreach ($objects as $object) {
@@ -285,10 +292,9 @@ class EZAlbum
 					if (filetype($dir."/".$object) == "dir") $this->cleanAndDelete($dir."/".$object); else unlink($dir."/".$object);
 				}
 			}
-			reset($objects);
-			rmdir($dir);
+		reset($objects);
+		rmdir($dir);
 		}
-
 	}
 
 	/**
@@ -307,7 +313,6 @@ class EZAlbum
 		$this->albumName = $albumName;
 	}
 
-
 	/**
 	 * @return boolean
 	 */
@@ -323,11 +328,17 @@ class EZAlbum
 	{
 		$this->sendToProcessing = $sendToProcessing;
 	}
-	
+
+	/**
+	 * @return integer
+	 */
 	public function getSubDirectoryCount(){
 		return $this->subDirectoryRecursion;
 	}
-	
+
+	/**
+	 * @param integer
+	 */
 	public function setSubDirectoryCount(){
 		$this->subDirectoryRecursion = intval($this->getSubDirectoryCount())+1;
 	}
@@ -373,11 +384,8 @@ class EZAlbum
 	}
 }
 
-
 #######
-$demoZipFile ="Bethel-2016.zip";
+$uploadedZipFile ="Demo-Photo-Album-2016.zip";
 #######
 
-$myAlbum = new EZAlbum($demoZipFile,TRUE);   // $demoZipFile = Name of Zip File, TRUE = Override Album and recreate in Albums folder
-
-//$myAlbum->unzip($demoZipFile);
+$myAlbum = new EZAlbum($uploadedZipFile,TRUE);   // $demoZipFile = Name of Zip File, TRUE = Override Album and recreate in Albums folder
