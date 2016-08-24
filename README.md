@@ -1,4 +1,7 @@
-# EZAlbumCreator, A tool to quickly deploy BASIC Photo Albums on a Web Page
+# EZAlbumCreator
+## A tool for quickly deploying BASIC Photo Albums on a Web Page
+
+### Currently Under Development
 
 My biggest issue with image storage is the time that it takes to get a ton of my photos from my computer to my website.
 With the EZAlbumCreator, you can upload a zipped file with all your images and it will finish by giving you code to embed on your webpage
