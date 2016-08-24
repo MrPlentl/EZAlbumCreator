@@ -1,5 +1,5 @@
 # EZAlbumCreator
-## A tool for quickly deploying BASIC Photo Albums on a Web Page
+### A tool for quickly deploying BASIC Photo Albums on a Web Page
 
 ### Currently Under Development
 
