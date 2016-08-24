@@ -14,25 +14,20 @@ define("PROCESSING_DIRECTORY", UPLOADS_DIRECTORY. "processing/");
 define("COMPLETED_DIRECTORY", UPLOADS_DIRECTORY. "completed/");
 
 
-
 class EZAlbum
 {
 	protected $arr_valid_image_types = array('png','jpe','jpeg','jpg');
-
 	protected $subDirectoryRecursion=0;
 	protected $sendToProcessing = FALSE;
 	protected $albumName = "UNSET";
-
 	protected $ZipFile="";
-
 	protected $albumOverride = TRUE;
-
-
-
 
 
     function __construct($myZipFile,$albumOverride=TRUE)
     {
+		// Build an Array of the Directories that will
+		//        need to exist for the Program to run
         $arr_RequiredDirectories = array(
 										ALBUM_DIRECTORY,
 										BACKUPS_DIRECTORY,
@@ -40,52 +35,58 @@ class EZAlbum
 										PROCESSING_DIRECTORY,
 										COMPLETED_DIRECTORY
 									);
-
+		# Create any required Directories
         foreach ($arr_RequiredDirectories as $checkDirectory) {
             if (file_exists($checkDirectory) == FALSE) {
                 mkdir($checkDirectory, 0777, TRUE);
             }
         }
 
-		$this->setZipFile($myZipFile);
-		$this->setAlbumOverride($albumOverride);
-		$this->unzip();
+		$this->setZipFile($myZipFile);             // Using the given ZipFile name, set the class property '$ZipFile' to it
+		$this->setAlbumOverride($albumOverride);   // FUTURE ENHANCEMENT: Eventually, the user will have the option to just add new files to an album. Right now, the album is forced to rebuild every time
+		$this->unzip();                            ## UNZIP and PROCESS the contents of the zip file
     }
 
 	function __destruct(){
-		$this->cleanAndDelete(PROCESSING_DIRECTORY);
-		$this->cleanAndDelete(COMPLETED_DIRECTORY);
+
+		// The following methods are fired in the destructor to clean out any files that don't need to be there for the next execution
+
+		$this->cleanAndDelete(PROCESSING_DIRECTORY);   // This will clean up any files and folders that may remain in the uploads folder leaving it clean for the next process
+		       # Possible Issue: The cleanup works fine in a single user case, but if multiple people are working at the same time, there is a small chance of cleanup collision
+
+		$this->cleanAndDelete(COMPLETED_DIRECTORY);    // This also cleans out the Completed directory, but I think I may change this to SAVE for a certain amount of time
 	}
 
 
-    public function unzip (){
-		$myZipFile = $this->getZipFile();
+    private function unzip(){
+
+		$myZipFile = $this->getZipFile();    // Get the class property and set it to the local variable $myZipFile
+
         ######### ZIP EXTRACTION   #############
-        $zip = new ZipArchive;
+        $zip = new ZipArchive;   // Using the PHP ZipArchive Class. http://php.net/manual/en/class.ziparchive.php
         if ($zip->open(UPLOADS_DIRECTORY . $myZipFile) === TRUE) {
 			
-			$tempFileName = "temp_" . date("Ymds") . "_" . substr($myZipFile,0,-4);
+			$tempFileName = "temp_" . date("Ymds") . "_" . substr($myZipFile,0,-4);   // This will remove the .zip off the end and it is also the temporary name used while processing
 
             $extracted_location = PROCESSING_DIRECTORY . $tempFileName;
 
-            $zip->extractTo($extracted_location);   //This will remove the .zip off the end
-            $zip->close();
+            $zip->extractTo($extracted_location);   // Extracts the zipfile
+            $zip->close();                          // Close opened or created archive
 
-			$this->setAlbumName(substr($myZipFile,0,-4));
+			$this->setAlbumName(substr($myZipFile,0,-4));   // This will set the Album Name to whatever the name of the zip file is.
+			         # FUTURE ENHANCEMENT: Allow the USER to name the Album versus using the default name from the Zip File
 
             echo 'Files Extracted...' . PHP_EOL;
-            // Move ZIP File
 
+			$extracted_location = $this->scanForSubDirectories($extracted_location);   // After the files have been extracted, scan for sub directories.
 
-
-			$extracted_location = $this->scanForSubDirectories($extracted_location);
-
+			// Once the class property $sendToProcessing is TRUE, Run containsFiles()
 			if($this->isSendToProcessing()===TRUE){
 				$this->containsFiles($extracted_location);
 			}else{
 				echo "An ERROR Occurred";
 			}
-
+		// Rename and Move the uploaded zip file to the Completed directory.
 		rename(UPLOADS_DIRECTORY.$myZipFile, COMPLETED_DIRECTORY. date("Ymds") . "_" . $myZipFile);
 		echo 'Zip File Moved to Completed...' . PHP_EOL;
 
@@ -153,10 +154,13 @@ class EZAlbum
 
 		$arrDocs = array_diff(scandir($extracted_location), array('..', '.'));
 		natcasesort($arrDocs);  //Sort the File List
-		echo "Contains Files".PHP_EOL;
+
+		echo "Contains ". count($arrDocs) . " Files".PHP_EOL;
+
+		$ctrPadding = strlen(count($arrDocs));
+		$fileCtr=0;
 		foreach( $arrDocs as $a )   //For each document in the current document array
 		{
-
 			echo "Processing - " . $a . PHP_EOL;
 			// File search and count
 			if( is_file($extracted_location . "/" . $a) && $a != "." && $a != ".." && substr($a,strlen($a)-3,3) != ".db" )      //The "." and ".." are directories.  "." is the current and ".." is the parent
@@ -166,12 +170,15 @@ class EZAlbum
 					echo "DELETE - " .$a . PHP_EOL;
 					unlink($image_file);
 				} else{
-					$this->process_image_upload($extracted_location, $a);
-				}
+					$fileCtr++;
 
+					$newName = $this->getAlbumName() . "-" . str_pad($fileCtr,$ctrPadding, "0", STR_PAD_LEFT) . substr($a,-4);
+					rename($image_file, $extracted_location . "/" . $newName);
+
+					$this->process_image_upload($extracted_location, $newName);
+				}
 			}
 		}
-
 
 		if ($this->isAlbumOverride() == TRUE && file_exists(ALBUM_DIRECTORY.$this->getAlbumName())) {
 			// Optional Clean and Delete or I can just back it up
@@ -187,7 +194,6 @@ class EZAlbum
 		}
 
 		rename($extracted_location, ALBUM_DIRECTORY.$this->getAlbumName());
-
 	}
 
 	private function process_image_upload( $extracted_location, $image_file ) {
