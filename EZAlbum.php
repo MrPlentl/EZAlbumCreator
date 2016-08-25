@@ -176,7 +176,7 @@ class EZAlbum
 					$fileCtr++;
 
 					## Create a new image name based off the Album Name
-					$newName = $this->getAlbumName() . "-" . str_pad($fileCtr,$ctrPadding, "0", STR_PAD_LEFT) . substr($a,-4);
+					$newName = $this->getAlbumName() . "-" . str_pad($fileCtr,$ctrPadding, "0", STR_PAD_LEFT) . "." . pathinfo($a, PATHINFO_EXTENSION);
 					rename($image_file, $extracted_location . "/" . $newName);
 
 					$this->process_image_upload($extracted_location, $newName);   // Process the image; create thumbnails
@@ -235,7 +235,7 @@ class EZAlbum
 		}
 
 		$uploaded_image_path = $UPLOADED_IMAGE_DESTINATION . "/" . $image_file;
-		$thumbnail_image_path = $THUMBNAIL_IMAGE_DESTINATION . preg_replace('{\\.[^\\.]+$}', '.jpg', "thumb_" . $image_file);
+		$thumbnail_image_path = $THUMBNAIL_IMAGE_DESTINATION . preg_replace('{\\.[^\\.]+$}', '.' . pathinfo($image_file, PATHINFO_EXTENSION), "thumb_" . $image_file);
 		$result = $this->generate_image_thumbnail($uploaded_image_path, $thumbnail_image_path);
 
 		return $result ? array($uploaded_image_path, $thumbnail_image_path) : false;
@@ -385,7 +385,7 @@ class EZAlbum
 }
 
 #######
-$uploadedZipFile ="Demo-Photo-Album-2016.zip";
+$uploadedZipFile ="Demo-Photo-Album.zip";
 #######
 
 $myAlbum = new EZAlbum($uploadedZipFile,TRUE);   // $demoZipFile = Name of Zip File, TRUE = Override Album and recreate in Albums folder
