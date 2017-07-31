@@ -81,7 +81,7 @@ class EZAlbum
 			if($this->isSendToProcessing()===TRUE){
 				$this->containsFiles($extracted_location);
 			}else{
-				echo "An ERROR Occurred";
+				echo "An ERROR Occurred\n";
 			}
 		// Rename and Move the uploaded zip file to the Completed directory.
 		rename(UPLOADS_DIRECTORY.$myZipFile, COMPLETED_DIRECTORY. date("Ymds") . "_" . $myZipFile);
@@ -385,7 +385,7 @@ class EZAlbum
 }
 
 #######
-$uploadedZipFile ="Demo-Photo-Album.zip";
+$uploadedZipFile ="new-york.zip";
 #######
 
 $myAlbum = new EZAlbum($uploadedZipFile,TRUE);   // $demoZipFile = Name of Zip File, TRUE = Override Album and recreate in Albums folder
