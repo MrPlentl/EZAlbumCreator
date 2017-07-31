@@ -117,7 +117,7 @@ class EZAlbum
 		return $extracted_location;
 	}
 
-    private function containsSubDirectory($arrDocs,$extracted_location){
+    private function containsSubDirectory($arrDocs, $extracted_location){
 		$sub_directory="";
 		$dir_counter = 0;
 		foreach ($arrDocs as $a)   //For each document in the current document array
