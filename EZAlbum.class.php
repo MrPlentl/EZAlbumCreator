@@ -383,9 +383,3 @@ class EZAlbum
 		$this->albumOverride = $albumOverride;
 	}
 }
-
-#######
-$uploadedZipFile ="new-york.zip";
-#######
-
-$myAlbum = new EZAlbum($uploadedZipFile,TRUE);   // $demoZipFile = Name of Zip File, TRUE = Override Album and recreate in Albums folder
